@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public class DatabaseConnection {
-    // Gunakan konfigurasi MySQL sebagai default
     private static final String MYSQL_HOST = "localhost";
     private static final String MYSQL_PORT = "3306";
     private static final String MYSQL_DB = "woodify_db";
@@ -20,7 +19,7 @@ public class DatabaseConnection {
     private static final String SQLITE_URL = "jdbc:sqlite:woodify.db";
     
     // Gunakan boolean untuk mempermudah perpindahan antar engine database
-    private static final boolean USE_SQLITE = false; 
+    private static final boolean USE_SQLITE = true; 
 
     private static Connection connection = null;
 
@@ -34,6 +33,9 @@ public class DatabaseConnection {
                 if (USE_SQLITE) {
                     Class.forName("org.sqlite.JDBC");
                     connection = DriverManager.getConnection(SQLITE_URL);
+                    try (Statement pragmaStmt = connection.createStatement()) {
+                        pragmaStmt.execute("PRAGMA foreign_keys = ON;");
+                    }
                     System.out.println("Koneksi database SQLite berhasil.");
                 } else {
                     Class.forName("com.mysql.cj.jdbc.Driver");
@@ -81,9 +83,11 @@ public class DatabaseConnection {
 
     private static void initializeDatabaseSchema(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
+            String pkSyntax = USE_SQLITE ? "INTEGER PRIMARY KEY AUTOINCREMENT" : "INT AUTO_INCREMENT PRIMARY KEY";
+
             // 1. Tabel users
             stmt.execute("CREATE TABLE IF NOT EXISTS users (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "id " + pkSyntax + "," +
                     "username VARCHAR(50) NOT NULL UNIQUE," +
                     "password VARCHAR(255) NOT NULL," +
                     "nama_lengkap VARCHAR(100) NOT NULL," +
@@ -102,7 +106,7 @@ public class DatabaseConnection {
 
             // 3. Tabel pelanggan
             stmt.execute("CREATE TABLE IF NOT EXISTS pelanggan (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "id " + pkSyntax + "," +
                     "nama VARCHAR(100) NOT NULL," +
                     "telepon VARCHAR(20)," +
                     "alamat TEXT" +
@@ -123,7 +127,7 @@ public class DatabaseConnection {
 
             // 5. Tabel detail_transaksi
             stmt.execute("CREATE TABLE IF NOT EXISTS detail_transaksi (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY," +
+                    "id " + pkSyntax + "," +
                     "transaksi_id VARCHAR(50) NOT NULL," +
                     "produk_id VARCHAR(20) NOT NULL," +
                     "qty INT NOT NULL," +

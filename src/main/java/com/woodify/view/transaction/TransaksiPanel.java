@@ -10,9 +10,11 @@ import com.woodify.model.Transaksi;
 import com.woodify.service.PelangganService;
 import com.woodify.service.ProdukService;
 import com.woodify.service.TransaksiService;
+import com.woodify.service.PaymentService;
 import com.woodify.service.impl.PelangganServiceImpl;
 import com.woodify.service.impl.ProdukServiceImpl;
 import com.woodify.service.impl.TransaksiServiceImpl;
+import com.woodify.service.impl.PaymentServiceImpl;
 import com.woodify.view.BasePanel;
 
 import javax.swing.*;
@@ -29,6 +31,7 @@ public class TransaksiPanel extends BasePanel {
     private final ProdukService produkService;
     private final PelangganService pelangganService;
     private final TransaksiService transaksiService;
+    private final PaymentService paymentService;
 
     private JComboBox<Pelanggan> cbPelanggan;
     private JComboBox<Produk> cbProduk;
@@ -50,6 +53,7 @@ public class TransaksiPanel extends BasePanel {
         this.produkService = new ProdukServiceImpl();
         this.pelangganService = new PelangganServiceImpl();
         this.transaksiService = new TransaksiServiceImpl();
+        this.paymentService = new PaymentServiceImpl();
         this.rpFormat = NumberFormat.getCurrencyInstance(new Locale("in", "ID"));
         
         initUI();
@@ -352,7 +356,7 @@ public class TransaksiPanel extends BasePanel {
                 trx.addDetail(d);
             }
 
-            trx.processPayment(cash);
+            paymentService.processPayment(trx, cash);
 
             // Simpan ke DB dengan transactional control
             transaksiService.processTransaction(trx);
