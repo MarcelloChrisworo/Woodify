@@ -32,8 +32,12 @@ public class PelangganPanel extends BasePanel {
     private JButton btnClear;
 
     public PelangganPanel() {
+        this(new PelangganServiceImpl());
+    }
+
+    public PelangganPanel(PelangganService pelangganService) {
         super("Manajemen Pelanggan");
-        this.pelangganService = new PelangganServiceImpl();
+        this.pelangganService = pelangganService;
         
         initUI();
     }

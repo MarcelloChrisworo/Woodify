@@ -1,6 +1,7 @@
 package com.woodify.view.transaction;
 
 import com.woodify.model.Transaksi;
+import com.woodify.service.ReceiptPrinter;
 import com.woodify.service.impl.NotaServiceImpl;
 import com.woodify.util.CurrencyUtil;
 import com.woodify.util.DateUtil;
@@ -26,11 +27,17 @@ public class NotaDialog extends JDialog {
     private static final Color COLOR_WHITE     = Color.WHITE;
 
     private final Transaksi transaksi;
+    private final ReceiptPrinter receiptPrinter;
     private       JTextArea txtReceipt;
 
     public NotaDialog(Window owner, Transaksi transaksi) {
+        this(owner, transaksi, new NotaServiceImpl());
+    }
+
+    public NotaDialog(Window owner, Transaksi transaksi, ReceiptPrinter receiptPrinter) {
         super(owner, "Struk Pembayaran – Woodify", ModalityType.APPLICATION_MODAL);
         this.transaksi = transaksi;
+        this.receiptPrinter = receiptPrinter;
         initUI();
     }
 
@@ -58,7 +65,7 @@ public class NotaDialog extends JDialog {
         add(header, BorderLayout.NORTH);
 
         // ─── Receipt Body ─────────────────────────────────────────────────
-        String receiptText = new NotaServiceImpl().buildReceiptString(transaksi);
+        String receiptText = receiptPrinter.buildReceiptString(transaksi);
 
         txtReceipt = new JTextArea(receiptText);
         txtReceipt.setEditable(false);
@@ -80,13 +87,10 @@ public class NotaDialog extends JDialog {
         summaryBar.add(makeSummaryCell("Bayar", CurrencyUtil.formatRupiah(transaksi.getBayar())));
         summaryBar.add(makeSummaryCell("Kembalian", CurrencyUtil.formatRupiah(transaksi.getKembalian())));
 
-        add(summaryBar, BorderLayout.CENTER);  // inserted below receipt via BorderLayout trick — use wrapper
-        // Re-structure: wrap scroll + summary in center panel
         JPanel centerWrapper = new JPanel(new BorderLayout());
+        centerWrapper.setBackground(COLOR_BG);
         centerWrapper.add(scroll, BorderLayout.CENTER);
         centerWrapper.add(summaryBar, BorderLayout.SOUTH);
-        remove(scroll); // remove direct add
-        remove(summaryBar);
         add(centerWrapper, BorderLayout.CENTER);
 
         // ─── Buttons ──────────────────────────────────────────────────────

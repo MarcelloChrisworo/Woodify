@@ -1,12 +1,11 @@
 package com.woodify.view.product;
 
-import com.woodify.config.SessionManager;
 import com.woodify.exception.ValidationException;
 import com.woodify.model.Produk;
-import com.woodify.model.User;
 import com.woodify.service.ProdukService;
 import com.woodify.service.impl.ProdukServiceImpl;
 import com.woodify.view.BasePanel;
+import com.woodify.view.product.access.ProdukAccessPolicy;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -184,13 +183,21 @@ public class ProdukPanel extends BasePanel {
         buttonPanel.add(btnHapus);
         buttonPanel.add(btnClear);
 
-        rightPanel.add(buttonPanel, BorderLayout.SOUTH);
+        JPanel actionPanel = new JPanel(new BorderLayout(0, 8));
+        actionPanel.setBackground(COLOR_WHITE);
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        statusPanel.setOpaque(false);
+
+        actionPanel.add(buttonPanel, BorderLayout.CENTER);
+        actionPanel.add(statusPanel, BorderLayout.SOUTH);
+
+        rightPanel.add(actionPanel, BorderLayout.SOUTH);
         mainContent.add(rightPanel);
 
         add(mainContent, BorderLayout.CENTER);
         
         // PBO Access Control: Kasir tidak memiliki akses CRUD
-        applyUserRolePermission();
+        applyUserRolePermission(statusPanel);
     }
 
     private JLabel createFormLabel(String text) {
@@ -200,10 +207,8 @@ public class ProdukPanel extends BasePanel {
         return label;
     }
 
-    private void applyUserRolePermission() {
-        User currentUser = SessionManager.getCurrentUser();
-        if (currentUser != null && !currentUser.hasAccessToProductManagement()) {
-            // Kasir: Nonaktifkan form input dan tombol aksi
+    private void applyUserRolePermission(JPanel statusPanel) {
+        if (!ProdukAccessPolicy.canManageProducts()) {
             txtId.setEnabled(false);
             txtNama.setEnabled(false);
             cbKategori.setEnabled(false);
@@ -215,11 +220,10 @@ public class ProdukPanel extends BasePanel {
             btnUbah.setEnabled(false);
             btnHapus.setEnabled(false);
             
-            // Beri label warning
-            JLabel lblWarning = new JLabel("Mode Lihat-Saja (Akses Kasir Terbatas)");
+            JLabel lblWarning = new JLabel(ProdukAccessPolicy.getReadOnlyMessage());
             lblWarning.setForeground(COLOR_DANGER);
             lblWarning.setFont(new Font("SansSerif", Font.ITALIC, 11));
-            add(lblWarning, BorderLayout.SOUTH);
+            statusPanel.add(lblWarning);
         }
     }
 
