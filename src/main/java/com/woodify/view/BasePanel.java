@@ -9,6 +9,7 @@ public abstract class BasePanel extends JPanel {
     protected static final Color COLOR_SECONDARY = new Color(212, 163, 115); // Warm Amber (#D4A373)
     protected static final Color COLOR_BG_LIGHT = new Color(248, 249, 250); // Light Gray (#F8F9FA)
     protected static final Color COLOR_TEXT_DARK = new Color(33, 37, 41);    // Dark Gray (#212529)
+    protected static final Color COLOR_TEXT_LIGHT = Color.WHITE;
     protected static final Color COLOR_WHITE = Color.WHITE;
     protected static final Color COLOR_DANGER = new Color(220, 53, 69);     // Soft Red (#DC3545)
     protected static final Color COLOR_SUCCESS = new Color(40, 167, 69);    // Soft Green (#28A745)
@@ -44,9 +45,30 @@ public abstract class BasePanel extends JPanel {
         btn.setFont(FONT_BUTTON);
         btn.setBackground(bg);
         btn.setForeground(fg);
+        btn.setOpaque(true);
+        btn.setContentAreaFilled(true);
+        btn.setBorderPainted(false);
         btn.setFocusPainted(false);
         btn.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return btn;
+    }
+
+    protected JTextField createStyledTextField() {
+        JTextField field = new JTextField();
+        field.setFont(FONT_REGULAR);
+        field.setForeground(COLOR_TEXT_DARK);
+        field.setCaretColor(COLOR_TEXT_DARK);
+        field.setBackground(COLOR_WHITE);
+        return field;
+    }
+
+    protected JTextArea createStyledTextArea() {
+        JTextArea area = new JTextArea();
+        area.setFont(FONT_REGULAR);
+        area.setForeground(COLOR_TEXT_DARK);
+        area.setCaretColor(COLOR_TEXT_DARK);
+        area.setBackground(COLOR_WHITE);
+        return area;
     }
 }
