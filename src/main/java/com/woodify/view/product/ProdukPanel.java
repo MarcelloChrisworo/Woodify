@@ -8,350 +8,583 @@ import com.woodify.view.BasePanel;
 import com.woodify.view.product.access.ProdukAccessPolicy;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
 import java.text.NumberFormat;
 import java.util.List;
 import java.util.Locale;
 
 public class ProdukPanel extends BasePanel {
     private final ProdukService produkService;
-
-    private JTable tblProduk;
-    private DefaultTableModel tableModel;
-    private JTextField txtSearch;
-    
-    // Form Input Fields
-    private JTextField txtId;
-    private JTextField txtNama;
-    private JComboBox<String> cbKategori;
-    private JTextField txtHarga;
-    private JTextField txtStok;
-    private JTextArea txtDeskripsi;
-
-    private JButton btnTambah;
-    private JButton btnUbah;
-    private JButton btnHapus;
-    private JButton btnClear;
-    
     private final NumberFormat rpFormat;
+
+    // UI Colors
+    private static final Color COLOR_BG = new Color(255, 248, 245);
+    private static final Color COLOR_TEXT_DARK = new Color(74, 35, 17);
+    private static final Color COLOR_TEXT_MUTED = new Color(130, 100, 90);
+    private static final Color COLOR_CARD_BG = Color.WHITE;
+    private static final Color COLOR_FAB_BG = new Color(0, 77, 64); // Dark Green #004D40
+    private static final Color COLOR_FAB_HOVER = new Color(0, 96, 80);
+
+    private static final Color COLOR_TEAL_BG = new Color(224, 242, 241); // Normal Stock Badge Bg
+    private static final Color COLOR_TEAL_TXT = new Color(0, 121, 107);
+    private static final Color COLOR_PINK_BG = new Color(255, 235, 235); // Critical Stock Badge Bg
+    private static final Color COLOR_PINK_TXT = new Color(198, 40, 40);
+
+    private JTextField txtSearch;
+    private JPanel listContainer;
+    private JButton btnFab;
+    private JScrollPane scroll;
 
     public ProdukPanel() {
         super("Manajemen Produk");
         this.produkService = new ProdukServiceImpl();
         this.rpFormat = NumberFormat.getCurrencyInstance(new Locale("in", "ID"));
-        
         initUI();
     }
 
     private void initUI() {
-        // Layout: Split Pane (Kiri: Tabel + Search, Kanan: Form input)
-        JPanel mainContent = new JPanel(new GridLayout(1, 2, 20, 0));
-        mainContent.setBackground(COLOR_BG_LIGHT);
+        removeAll();
+        setLayout(new BorderLayout());
+        setBackground(COLOR_BG);
 
-        // --- PANEL KIRI: DAFTAR PRODUK & PENCARIAN ---
-        JPanel leftPanel = new JPanel(new BorderLayout(10, 10));
-        leftPanel.setBackground(COLOR_BG_LIGHT);
+        // Layered pane for FAB
+        JLayeredPane layeredPane = new JLayeredPane();
+        layeredPane.setLayout(null);
 
-        // Search Bar
-        JPanel searchPanel = new JPanel(new BorderLayout(10, 0));
-        searchPanel.setBackground(COLOR_BG_LIGHT);
-        txtSearch = new JTextField();
-        txtSearch.setPreferredSize(new Dimension(0, 30));
-        txtSearch.setFont(FONT_REGULAR);
-        JButton btnSearch = createStyledButton("Cari", COLOR_PRIMARY, COLOR_WHITE);
-        btnSearch.addActionListener(e -> performSearch());
-        
-        txtSearch.addActionListener(e -> performSearch());
+        // Content Panel (Layout Y_AXIS)
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setBackground(COLOR_BG);
+        contentPanel.setBorder(new EmptyBorder(25, 20, 25, 20));
 
-        searchPanel.add(txtSearch, BorderLayout.CENTER);
-        searchPanel.add(btnSearch, BorderLayout.EAST);
-        leftPanel.add(searchPanel, BorderLayout.NORTH);
+        // 1. Header
+        JLabel titleLabel = new JLabel("Manajemen Produk");
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 22));
+        titleLabel.setForeground(COLOR_TEXT_DARK);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(titleLabel);
 
-        // Tabel
-        String[] columns = {"ID", "Nama", "Kategori", "Harga", "Stok"};
-        tableModel = new DefaultTableModel(columns, 0) {
+        JLabel subtitleLabel = new JLabel("Kelola inventaris dan katalog furnitur.");
+        subtitleLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        subtitleLabel.setForeground(COLOR_TEXT_MUTED);
+        subtitleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(subtitleLabel);
+
+        addSpacer(contentPanel, 15);
+
+        // 2. Search and Filter row
+        JPanel searchBarRow = new JPanel();
+        searchBarRow.setLayout(new BoxLayout(searchBarRow, BoxLayout.X_AXIS));
+        searchBarRow.setOpaque(false);
+        searchBarRow.setMaximumSize(new Dimension(Short.MAX_VALUE, 40));
+        searchBarRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        // Search Field Rounded
+        JPanel searchWrapper = new JPanel(new BorderLayout(8, 0)) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(242, 232, 227));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 20, 20);
+                g2.dispose();
             }
         };
+        searchWrapper.setOpaque(false);
+        searchWrapper.setBorder(new EmptyBorder(6, 12, 6, 12));
 
-        tblProduk = new JTable(tableModel);
-        tblProduk.setFont(FONT_REGULAR);
-        tblProduk.setRowHeight(25);
-        tblProduk.getTableHeader().setBackground(COLOR_PRIMARY);
-        tblProduk.getTableHeader().setForeground(COLOR_WHITE);
-        tblProduk.getTableHeader().setFont(FONT_BUTTON);
-
-        // Row Selection Listener
-        tblProduk.addMouseListener(new MouseAdapter() {
+        JLabel searchIcon = new JLabel("🔍");
+        searchIcon.setForeground(COLOR_TEXT_MUTED);
+        txtSearch = new JTextField();
+        txtSearch.setOpaque(false);
+        txtSearch.setBorder(null);
+        txtSearch.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        txtSearch.setForeground(COLOR_TEXT_DARK);
+        txtSearch.putClientProperty("JTextField.placeholderText", "Cari kode atau nama...");
+        txtSearch.addActionListener(e -> performSearch());
+        // Live search on key release
+        txtSearch.addKeyListener(new java.awt.event.KeyAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                int selectedRow = tblProduk.getSelectedRow();
-                if (selectedRow != -1) {
-                    loadSelectedProductToForm();
-                }
+            public void keyReleased(java.awt.event.KeyEvent evt) {
+                performSearch();
             }
         });
 
-        JScrollPane scrollPane = new JScrollPane(tblProduk);
-        leftPanel.add(scrollPane, BorderLayout.CENTER);
-        mainContent.add(leftPanel);
+        searchWrapper.add(searchIcon, BorderLayout.WEST);
+        searchWrapper.add(txtSearch, BorderLayout.CENTER);
 
-        // --- PANEL KANAN: FORM INPUT & AKSI ---
-        JPanel rightPanel = new JPanel(new BorderLayout(10, 10));
-        rightPanel.setBackground(COLOR_WHITE);
-        rightPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1),
-                BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
+        // Filter button
+        JButton btnFilter = new JButton("🎛️") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(250, 240, 235));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+                g2.setColor(new Color(230, 220, 215));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 16, 16);
+                g2.dispose();
+            }
+        };
+        btnFilter.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
+        btnFilter.setContentAreaFilled(false);
+        btnFilter.setBorderPainted(false);
+        btnFilter.setFocusPainted(false);
+        btnFilter.setPreferredSize(new Dimension(40, 40));
+        btnFilter.setMaximumSize(new Dimension(40, 40));
+        btnFilter.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnFilter.addActionListener(e -> {
+            JOptionPane.showMessageDialog(this, "Fitur filter kategori akan tersedia segera.", "Filter", JOptionPane.INFORMATION_MESSAGE);
+        });
 
-        // Form Fields
-        JPanel formGrid = new JPanel(new GridBagLayout());
-        formGrid.setBackground(COLOR_WHITE);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 5, 5, 5);
+        searchBarRow.add(searchWrapper);
+        searchBarRow.add(Box.createRigidArea(new Dimension(10, 0)));
+        searchBarRow.add(btnFilter);
 
-        // Row 1: ID Produk
-        gbc.gridx = 0; gbc.gridy = 0;
-        formGrid.add(createFormLabel("ID Produk:"), gbc);
-        gbc.gridx = 1;
-        txtId = new JTextField();
-        txtId.setPreferredSize(new Dimension(200, 25));
-        formGrid.add(txtId, gbc);
+        contentPanel.add(searchBarRow);
 
-        // Row 2: Nama Produk
-        gbc.gridx = 0; gbc.gridy = 1;
-        formGrid.add(createFormLabel("Nama Produk:"), gbc);
-        gbc.gridx = 1;
-        txtNama = new JTextField();
-        formGrid.add(txtNama, gbc);
+        addSpacer(contentPanel, 20);
 
-        // Row 3: Kategori
-        gbc.gridx = 0; gbc.gridy = 2;
-        formGrid.add(createFormLabel("Kategori:"), gbc);
-        gbc.gridx = 1;
-        cbKategori = new JComboBox<>(new String[]{"Kursi & Sofa", "Meja", "Lemari", "Dekorasi", "Lainnya"});
-        formGrid.add(cbKategori, gbc);
+        // 3. Product Cards Vertical List
+        listContainer = new JPanel();
+        listContainer.setLayout(new BoxLayout(listContainer, BoxLayout.Y_AXIS));
+        listContainer.setOpaque(false);
+        listContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(listContainer);
 
-        // Row 4: Harga
-        gbc.gridx = 0; gbc.gridy = 3;
-        formGrid.add(createFormLabel("Harga (Rp):"), gbc);
-        gbc.gridx = 1;
-        txtHarga = new JTextField();
-        formGrid.add(txtHarga, gbc);
+        // ScrollPane wraps content
+        scroll = new JScrollPane(contentPanel);
+        scroll.setBorder(null);
+        scroll.setBackground(COLOR_BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
-        // Row 5: Stok
-        gbc.gridx = 0; gbc.gridy = 4;
-        formGrid.add(createFormLabel("Stok Awal:"), gbc);
-        gbc.gridx = 1;
-        txtStok = new JTextField();
-        formGrid.add(txtStok, gbc);
+        layeredPane.add(scroll, JLayeredPane.DEFAULT_LAYER);
 
-        // Row 6: Deskripsi
-        gbc.gridx = 0; gbc.gridy = 5;
-        formGrid.add(createFormLabel("Deskripsi:"), gbc);
-        gbc.gridx = 1;
-        txtDeskripsi = new JTextArea(4, 20);
-        txtDeskripsi.setLineWrap(true);
-        txtDeskripsi.setWrapStyleWord(true);
-        txtDeskripsi.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-        formGrid.add(new JScrollPane(txtDeskripsi), gbc);
+        // 4. Floating Action Button (FAB)
+        btnFab = new JButton("+") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(COLOR_FAB_HOVER);
+                } else {
+                    g2.setColor(COLOR_FAB_BG);
+                }
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btnFab.setFont(new Font("SansSerif", Font.BOLD, 22));
+        btnFab.setForeground(Color.WHITE);
+        btnFab.setContentAreaFilled(false);
+        btnFab.setBorderPainted(false);
+        btnFab.setFocusPainted(false);
+        btnFab.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnFab.addActionListener(e -> showProductFormDialog(null));
 
-        rightPanel.add(formGrid, BorderLayout.CENTER);
+        layeredPane.add(btnFab, JLayeredPane.PALETTE_LAYER);
 
-        // Action Buttons
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        buttonPanel.setBackground(COLOR_WHITE);
-
-        btnTambah = createStyledButton("Tambah", COLOR_SUCCESS, COLOR_WHITE);
-        btnUbah = createStyledButton("Simpan / Ubah", COLOR_PRIMARY, COLOR_WHITE);
-        btnHapus = createStyledButton("Hapus", COLOR_DANGER, COLOR_WHITE);
-        btnClear = createStyledButton("Clear", Color.GRAY, COLOR_WHITE);
-
-        btnTambah.addActionListener(e -> handleAddProduct());
-        btnUbah.addActionListener(e -> handleUpdateProduct());
-        btnHapus.addActionListener(e -> handleDeleteProduct());
-        btnClear.addActionListener(e -> clearForm());
-
-        buttonPanel.add(btnTambah);
-        buttonPanel.add(btnUbah);
-        buttonPanel.add(btnHapus);
-        buttonPanel.add(btnClear);
-
-        JPanel actionPanel = new JPanel(new BorderLayout(0, 8));
-        actionPanel.setBackground(COLOR_WHITE);
-        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        statusPanel.setOpaque(false);
-
-        actionPanel.add(buttonPanel, BorderLayout.CENTER);
-        actionPanel.add(statusPanel, BorderLayout.SOUTH);
-
-        rightPanel.add(actionPanel, BorderLayout.SOUTH);
-        mainContent.add(rightPanel);
-
-        add(mainContent, BorderLayout.CENTER);
-        
-        // PBO Access Control: Kasir tidak memiliki akses CRUD
-        applyUserRolePermission(statusPanel);
-    }
-
-    private JLabel createFormLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(FONT_BUTTON);
-        label.setForeground(COLOR_PRIMARY);
-        return label;
-    }
-
-    private void applyUserRolePermission(JPanel statusPanel) {
+        // Hide FAB for Cashier (Read-only access)
         if (!ProdukAccessPolicy.canManageProducts()) {
-            txtId.setEnabled(false);
-            txtNama.setEnabled(false);
-            cbKategori.setEnabled(false);
-            txtHarga.setEnabled(false);
-            txtStok.setEnabled(false);
-            txtDeskripsi.setEnabled(false);
-            
-            btnTambah.setEnabled(false);
-            btnUbah.setEnabled(false);
-            btnHapus.setEnabled(false);
-            
-            JLabel lblWarning = new JLabel(ProdukAccessPolicy.getReadOnlyMessage());
-            lblWarning.setForeground(COLOR_DANGER);
-            lblWarning.setFont(new Font("SansSerif", Font.ITALIC, 11));
-            statusPanel.add(lblWarning);
+            btnFab.setVisible(false);
         }
+
+        // Resize Listener for Responsive Bounds
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                int w = getWidth();
+                int h = getHeight();
+                scroll.setBounds(0, 0, w, h);
+
+                int fabSize = 52;
+                btnFab.setBounds(w - fabSize - 20, h - fabSize - 20, fabSize, fabSize);
+            }
+        });
+
+        add(layeredPane, BorderLayout.CENTER);
+    }
+
+    private void addSpacer(JPanel parent, int height) {
+        JPanel spacer = new JPanel();
+        spacer.setOpaque(false);
+        spacer.setPreferredSize(new Dimension(0, height));
+        spacer.setMinimumSize(new Dimension(0, height));
+        spacer.setMaximumSize(new Dimension(Short.MAX_VALUE, height));
+        spacer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        parent.add(spacer);
+    }
+
+    private JPanel buildProductCard(Produk p) {
+        boolean isCritical = p.getStok() <= 5;
+
+        JPanel card = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(COLOR_CARD_BG);
+                g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 16, 16));
+                g2.setColor(new Color(230, 220, 215));
+                g2.draw(new RoundRectangle2D.Float(0, 0, getWidth() - 1, getHeight() - 1, 16, 16));
+                g2.dispose();
+            }
+        };
+        card.setLayout(new BorderLayout());
+        card.setOpaque(false);
+        card.setMaximumSize(new Dimension(Short.MAX_VALUE, 260));
+        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        // 1. Mockup Image Area (Gradient)
+        JPanel imgArea = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                // Draw rounded top corners gradient
+                GradientPaint gp = new GradientPaint(0, 0, new Color(245, 235, 230), 0, getHeight(), new Color(225, 215, 210));
+                g2.setPaint(gp);
+                g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight() + 10, 16, 16));
+                g2.dispose();
+            }
+        };
+        imgArea.setOpaque(false);
+        imgArea.setPreferredSize(new Dimension(0, 140));
+
+        // Emoji display based on category
+        String emoji = "🪵";
+        if (p.getKategori() != null) {
+            String cat = p.getKategori().toLowerCase();
+            if (cat.contains("sofa")) emoji = "🛋️";
+            else if (cat.contains("kursi")) emoji = "🪑";
+            else if (cat.contains("meja")) emoji = "🪵";
+            else if (cat.contains("lemari")) emoji = "🚪";
+        }
+        JLabel lblImg = new JLabel(emoji, SwingConstants.CENTER);
+        lblImg.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 52));
+        imgArea.add(lblImg, BorderLayout.CENTER);
+
+        // Top badges row
+        JPanel topBadgeRow = new JPanel(new BorderLayout());
+        topBadgeRow.setOpaque(false);
+        topBadgeRow.setBorder(new EmptyBorder(8, 12, 0, 12));
+
+        // Status Badge (Normal/Kritis)
+        JLabel lblStatus = new JLabel(isCritical ? "Kritis" : "Normal") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(isCritical ? COLOR_PINK_BG : COLOR_TEAL_BG);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        lblStatus.setFont(new Font("SansSerif", Font.BOLD, 10));
+        lblStatus.setForeground(isCritical ? COLOR_PINK_TXT : COLOR_TEAL_TXT);
+        lblStatus.setBorder(new EmptyBorder(3, 8, 3, 8));
+        lblStatus.setOpaque(false);
+
+        topBadgeRow.add(lblStatus, BorderLayout.WEST);
+        imgArea.add(topBadgeRow, BorderLayout.NORTH);
+
+        card.add(imgArea, BorderLayout.NORTH);
+
+        // 2. Info Area Below Image
+        JPanel infoArea = new JPanel();
+        infoArea.setLayout(new BoxLayout(infoArea, BoxLayout.Y_AXIS));
+        infoArea.setOpaque(false);
+        infoArea.setBorder(new EmptyBorder(10, 15, 10, 15));
+
+        // Category & Code Row
+        JPanel catCodeRow = new JPanel(new BorderLayout());
+        catCodeRow.setOpaque(false);
+        JLabel lblCode = new JLabel(p.getId());
+        lblCode.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        lblCode.setForeground(COLOR_TEXT_MUTED);
+
+        JLabel lblCat = new JLabel(p.getKategori()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(245, 238, 234));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        lblCat.setFont(new Font("SansSerif", Font.BOLD, 10));
+        lblCat.setForeground(COLOR_TEXT_MUTED);
+        lblCat.setBorder(new EmptyBorder(2, 6, 2, 6));
+
+        catCodeRow.add(lblCode, BorderLayout.WEST);
+        catCodeRow.add(lblCat, BorderLayout.EAST);
+
+        // Title Product
+        JLabel lblTitle = new JLabel(p.getNama());
+        lblTitle.setFont(new Font("SansSerif", Font.BOLD, 16));
+        lblTitle.setForeground(COLOR_TEXT_DARK);
+
+        // Price & Stock Row
+        JPanel priceStockRow = new JPanel(new BorderLayout());
+        priceStockRow.setOpaque(false);
+
+        JLabel lblPriceVal = new JLabel(rpFormat.format(p.getHarga()).replace("Rp", "Rp ").replace(",00", ""));
+        lblPriceVal.setFont(new Font("SansSerif", Font.BOLD, 14));
+        lblPriceVal.setForeground(COLOR_TEXT_DARK);
+
+        JLabel lblStockVal = new JLabel(p.getStok() + " Unit");
+        lblStockVal.setFont(new Font("SansSerif", Font.BOLD, 13));
+        lblStockVal.setForeground(isCritical ? COLOR_PINK_TXT : COLOR_TEXT_DARK);
+
+        JPanel priceLblPanel = new JPanel();
+        priceLblPanel.setLayout(new BoxLayout(priceLblPanel, BoxLayout.Y_AXIS));
+        priceLblPanel.setOpaque(false);
+        JLabel lblPriceTitle = new JLabel("Harga Jual");
+        lblPriceTitle.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        lblPriceTitle.setForeground(COLOR_TEXT_MUTED);
+        priceLblPanel.add(lblPriceTitle);
+        priceLblPanel.add(lblPriceVal);
+
+        JPanel stockLblPanel = new JPanel();
+        stockLblPanel.setLayout(new BoxLayout(stockLblPanel, BoxLayout.Y_AXIS));
+        stockLblPanel.setOpaque(false);
+        JLabel lblStockTitle = new JLabel("Stok");
+        lblStockTitle.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        lblStockTitle.setForeground(COLOR_TEXT_MUTED);
+        lblStockTitle.setAlignmentX(Component.RIGHT_ALIGNMENT);
+        lblStockVal.setAlignmentX(Component.RIGHT_ALIGNMENT);
+        stockLblPanel.add(lblStockTitle);
+        stockLblPanel.add(lblStockVal);
+
+        priceStockRow.add(priceLblPanel, BorderLayout.WEST);
+        priceStockRow.add(stockLblPanel, BorderLayout.EAST);
+
+        infoArea.add(catCodeRow);
+        infoArea.add(Box.createRigidArea(new Dimension(0, 4)));
+        infoArea.add(lblTitle);
+        infoArea.add(Box.createRigidArea(new Dimension(0, 8)));
+        infoArea.add(priceStockRow);
+
+        card.add(infoArea, BorderLayout.CENTER);
+
+        return card;
     }
 
     @Override
     public void onPageLoad() {
-        loadProductTable(produkService.getAllProducts());
-        clearForm();
+        txtSearch.setText("");
+        loadProducts(produkService.getAllProducts());
     }
 
-    private void loadProductTable(List<Produk> list) {
-        tableModel.setRowCount(0);
+    private void loadProducts(List<Produk> list) {
+        listContainer.removeAll();
         for (Produk p : list) {
-            tableModel.addRow(new Object[]{
-                    p.getId(),
-                    p.getNama(),
-                    p.getKategori(),
-                    rpFormat.format(p.getHarga()).replace("Rp", "Rp ").replace(",00", ""),
-                    p.getStok()
+            JPanel card = buildProductCard(p);
+            card.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    showProductFormDialog(p);
+                }
             });
+            listContainer.add(card);
+            listContainer.add(Box.createRigidArea(new Dimension(0, 15)));
         }
+        listContainer.revalidate();
+        listContainer.repaint();
     }
 
     private void performSearch() {
         String keyword = txtSearch.getText();
-        loadProductTable(produkService.searchProducts(keyword));
+        loadProducts(produkService.searchProducts(keyword));
     }
 
-    private void loadSelectedProductToForm() {
-        int selectedRow = tblProduk.getSelectedRow();
-        if (selectedRow != -1) {
-            String id = tableModel.getValueAt(selectedRow, 0).toString();
-            try {
-                Produk p = produkService.getProductById(id);
-                txtId.setText(p.getId());
-                txtId.setEditable(false); // ID tidak boleh diedit
-                txtNama.setText(p.getNama());
-                cbKategori.setSelectedItem(p.getKategori());
-                txtHarga.setText(String.format("%.0f", p.getHarga()));
-                txtStok.setText(String.valueOf(p.getStok()));
-                txtDeskripsi.setText(p.getDeskripsi());
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+    // popup form JDialog
+    private void showProductFormDialog(Produk p) {
+        Window parentWindow = SwingUtilities.getWindowAncestor(this);
+        boolean canEdit = ProdukAccessPolicy.canManageProducts();
+
+        JDialog dialog = new JDialog(parentWindow, p == null ? "Tambah Produk" : "Detail Produk", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setSize(360, 480);
+        dialog.setLocationRelativeTo(parentWindow);
+        dialog.setResizable(false);
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        JLabel title = new JLabel(p == null ? "Tambah Produk" : (canEdit ? "Ubah Produk" : "Detail Produk (Read-Only)"));
+        title.setFont(new Font("SansSerif", Font.BOLD, 18));
+        title.setForeground(COLOR_TEXT_DARK);
+        title.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(title);
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // Inputs
+        JLabel lblId = new JLabel("Kode Produk (ID)");
+        lblId.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblId.setForeground(COLOR_TEXT_MUTED);
+        lblId.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextField txtId = new JTextField(p == null ? "" : p.getId());
+        txtId.setEnabled(canEdit && p == null); // ID only editable during creation
+        txtId.setMaximumSize(new Dimension(Short.MAX_VALUE, 36));
+        txtId.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblNama = new JLabel("Nama Produk");
+        lblNama.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblNama.setForeground(COLOR_TEXT_MUTED);
+        lblNama.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextField txtNama = new JTextField(p == null ? "" : p.getNama());
+        txtNama.setEnabled(canEdit);
+        txtNama.setMaximumSize(new Dimension(Short.MAX_VALUE, 36));
+        txtNama.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblKategori = new JLabel("Kategori");
+        lblKategori.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblKategori.setForeground(COLOR_TEXT_MUTED);
+        lblKategori.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JComboBox<String> cbKategori = new JComboBox<>(new String[]{"Sofa", "Kursi", "Meja", "Lemari"});
+        cbKategori.setEnabled(canEdit);
+        if (p != null) cbKategori.setSelectedItem(p.getKategori());
+        cbKategori.setMaximumSize(new Dimension(Short.MAX_VALUE, 36));
+        cbKategori.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblHarga = new JLabel("Harga Jual (Rp)");
+        lblHarga.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblHarga.setForeground(COLOR_TEXT_MUTED);
+        lblHarga.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextField txtHarga = new JTextField(p == null ? "" : String.format("%.0f", p.getHarga()));
+        txtHarga.setEnabled(canEdit);
+        txtHarga.setMaximumSize(new Dimension(Short.MAX_VALUE, 36));
+        txtHarga.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblStok = new JLabel("Stok");
+        lblStok.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblStok.setForeground(COLOR_TEXT_MUTED);
+        lblStok.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextField txtStok = new JTextField(p == null ? "" : String.valueOf(p.getStok()));
+        txtStok.setEnabled(canEdit);
+        txtStok.setMaximumSize(new Dimension(Short.MAX_VALUE, 36));
+        txtStok.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        panel.add(lblId);
+        panel.add(Box.createRigidArea(new Dimension(0, 3)));
+        panel.add(txtId);
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        panel.add(lblNama);
+        panel.add(Box.createRigidArea(new Dimension(0, 3)));
+        panel.add(txtNama);
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        panel.add(lblKategori);
+        panel.add(Box.createRigidArea(new Dimension(0, 3)));
+        panel.add(cbKategori);
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        panel.add(lblHarga);
+        panel.add(Box.createRigidArea(new Dimension(0, 3)));
+        panel.add(txtHarga);
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        panel.add(lblStok);
+        panel.add(Box.createRigidArea(new Dimension(0, 3)));
+        panel.add(txtStok);
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // Action Buttons Row
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        btnRow.setOpaque(false);
+        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        if (canEdit) {
+            JButton btnSave = createStyledButton("Simpan", COLOR_FAB_BG, Color.WHITE);
+            btnSave.addActionListener(e -> {
+                try {
+                    String id = txtId.getText().trim();
+                    String nama = txtNama.getText().trim();
+                    String kategori = (String) cbKategori.getSelectedItem();
+                    String hargaStr = txtHarga.getText().trim();
+                    String stokStr = txtStok.getText().trim();
+
+                    if (id.isEmpty() || nama.isEmpty() || hargaStr.isEmpty() || stokStr.isEmpty()) {
+                        throw new ValidationException("Semua field formulir harus diisi.");
+                    }
+
+                    double harga;
+                    int stok;
+                    try {
+                        harga = Double.parseDouble(hargaStr);
+                    } catch (NumberFormatException ex) {
+                        throw new ValidationException("Harga harus berupa angka valid.");
+                    }
+                    try {
+                        stok = Integer.parseInt(stokStr);
+                    } catch (NumberFormatException ex) {
+                        throw new ValidationException("Stok harus berupa bilangan bulat valid.");
+                    }
+
+                    if (p == null) {
+                        Produk newProduct = new Produk(id, nama, kategori, harga, stok, "");
+                        produkService.addProduct(newProduct);
+                    } else {
+                        Produk updated = new Produk(p.getId(), nama, kategori, harga, stok, p.getDeskripsi());
+                        produkService.updateProduct(updated);
+                    }
+                    dialog.dispose();
+                    onPageLoad();
+                } catch (ValidationException ex) {
+                    JOptionPane.showMessageDialog(dialog, ex.getMessage(), "Validasi Gagal", JOptionPane.WARNING_MESSAGE);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(dialog, "Gagal menyimpan data: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
+            });
+
+            if (p != null) {
+                JButton btnDelete = createStyledButton("Hapus", new Color(198, 40, 40), Color.WHITE);
+                btnDelete.addActionListener(e -> {
+                    int confirm = JOptionPane.showConfirmDialog(dialog, 
+                        "Hapus produk " + p.getNama() + "?", "Konfirmasi Hapus", 
+                        JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                    if (confirm == JOptionPane.YES_OPTION) {
+                        try {
+                            produkService.deleteProduct(p.getId());
+                            dialog.dispose();
+                            onPageLoad();
+                        } catch (Exception ex) {
+                            JOptionPane.showMessageDialog(dialog, "Gagal menghapus: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                });
+                btnRow.add(btnDelete);
             }
-        }
-    }
 
-    private void handleAddProduct() {
-        try {
-            Produk p = getProductFromInput();
-            produkService.addProduct(p);
-            JOptionPane.showMessageDialog(this, "Produk berhasil ditambahkan!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
-            onPageLoad();
-        } catch (ValidationException ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Validasi Gagal", JOptionPane.WARNING_MESSAGE);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Gagal menambah produk: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
+            JButton btnCancel = createStyledButton("Batal", Color.GRAY, Color.WHITE);
+            btnCancel.addActionListener(e -> dialog.dispose());
 
-    private void handleUpdateProduct() {
-        try {
-            Produk p = getProductFromInput();
-            produkService.updateProduct(p);
-            JOptionPane.showMessageDialog(this, "Produk berhasil diperbarui!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
-            onPageLoad();
-        } catch (ValidationException ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Validasi Gagal", JOptionPane.WARNING_MESSAGE);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Gagal memperbarui produk: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void handleDeleteProduct() {
-        String id = txtId.getText();
-        if (id == null || id.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Pilih produk dari tabel terlebih dahulu.", "Info", JOptionPane.INFORMATION_MESSAGE);
-            return;
+            btnRow.add(btnCancel);
+            btnRow.add(btnSave);
+        } else {
+            JButton btnClose = createStyledButton("Tutup", COLOR_TEXT_DARK, Color.WHITE);
+            btnClose.addActionListener(e -> dialog.dispose());
+            btnRow.add(btnClose);
         }
 
-        int confirm = JOptionPane.showConfirmDialog(this, 
-                "Apakah Anda yakin ingin menghapus produk '" + id + "'?", "Konfirmasi Hapus", 
-                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        
-        if (confirm == JOptionPane.YES_OPTION) {
-            try {
-                produkService.deleteProduct(id);
-                JOptionPane.showMessageDialog(this, "Produk berhasil dihapus!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
-                onPageLoad();
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Gagal menghapus produk: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
+        panel.add(btnRow);
 
-    private Produk getProductFromInput() {
-        String id = txtId.getText();
-        String nama = txtNama.getText();
-        String kategori = (String) cbKategori.getSelectedItem();
-        String hargaStr = txtHarga.getText();
-        String stokStr = txtStok.getText();
-        String deskripsi = txtDeskripsi.getText();
-
-        double harga;
-        int stok;
-
-        try {
-            harga = Double.parseDouble(hargaStr);
-        } catch (NumberFormatException e) {
-            throw new ValidationException("Harga harus berupa angka valid.");
-        }
-
-        try {
-            stok = Integer.parseInt(stokStr);
-        } catch (NumberFormatException e) {
-            throw new ValidationException("Stok harus berupa bilangan bulat valid.");
-        }
-
-        return new Produk(id, nama, kategori, harga, stok, deskripsi);
-    }
-
-    private void clearForm() {
-        txtId.setText("");
-        txtId.setEditable(true);
-        txtNama.setText("");
-        cbKategori.setSelectedIndex(0);
-        txtHarga.setText("");
-        txtStok.setText("");
-        txtDeskripsi.setText("");
-        tblProduk.clearSelection();
+        dialog.add(panel);
+        dialog.setVisible(true);
     }
 }

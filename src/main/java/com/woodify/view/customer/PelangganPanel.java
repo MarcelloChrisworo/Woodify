@@ -7,290 +7,449 @@ import com.woodify.service.impl.PelangganServiceImpl;
 import com.woodify.view.BasePanel;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
 import java.util.List;
 
 public class PelangganPanel extends BasePanel {
     private final PelangganService pelangganService;
 
-    private JTable tblPelanggan;
-    private DefaultTableModel tableModel;
+    // UI Colors
+    private static final Color COLOR_BG = new Color(255, 248, 245);
+    private static final Color COLOR_TEXT_DARK = new Color(74, 35, 17);
+    private static final Color COLOR_TEXT_MUTED = new Color(130, 100, 90);
+    private static final Color COLOR_CARD_BG = Color.WHITE;
+    private static final Color COLOR_FAB_BG = new Color(0, 77, 64); // Dark Green #004D40
+    private static final Color COLOR_FAB_HOVER = new Color(0, 96, 80);
+
     private JTextField txtSearch;
-
-    // Form Input Fields
-    private JTextField txtId;
-    private JTextField txtNama;
-    private JTextField txtTelepon;
-    private JTextArea txtAlamat;
-
-    private JButton btnTambah;
-    private JButton btnUbah;
-    private JButton btnHapus;
-    private JButton btnClear;
+    private JPanel listContainer;
+    private JButton btnFab;
+    private JScrollPane scroll;
 
     public PelangganPanel() {
         this(new PelangganServiceImpl());
     }
 
     public PelangganPanel(PelangganService pelangganService) {
-        super("Manajemen Pelanggan");
+        super("Pelanggan");
         this.pelangganService = pelangganService;
-        
         initUI();
     }
 
     private void initUI() {
-        JPanel mainContent = new JPanel(new GridLayout(1, 2, 20, 0));
-        mainContent.setBackground(COLOR_BG_LIGHT);
+        removeAll();
+        setLayout(new BorderLayout());
+        setBackground(COLOR_BG);
 
-        // --- PANEL KIRI: DAFTAR PELANGGAN & PENCARIAN ---
-        JPanel leftPanel = new JPanel(new BorderLayout(10, 10));
-        leftPanel.setBackground(COLOR_BG_LIGHT);
+        // Main Layered Pane to support floating button
+        JLayeredPane layeredPane = new JLayeredPane();
+        layeredPane.setLayout(null);
 
-        // Search Bar
-        JPanel searchPanel = new JPanel(new BorderLayout(10, 0));
-        searchPanel.setBackground(COLOR_BG_LIGHT);
-        txtSearch = new JTextField();
-        txtSearch.setPreferredSize(new Dimension(0, 30));
-        txtSearch.setFont(FONT_REGULAR);
-        JButton btnSearch = createStyledButton("Cari", COLOR_PRIMARY, COLOR_WHITE);
-        btnSearch.addActionListener(e -> performSearch());
-        
-        txtSearch.addActionListener(e -> performSearch());
+        // Content Panel (Layout Y_AXIS)
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setBackground(COLOR_BG);
+        contentPanel.setBorder(new EmptyBorder(25, 20, 25, 20));
 
-        searchPanel.add(txtSearch, BorderLayout.CENTER);
-        searchPanel.add(btnSearch, BorderLayout.EAST);
-        leftPanel.add(searchPanel, BorderLayout.NORTH);
+        // 1. Title
+        JLabel titleLabel = new JLabel("Pelanggan");
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 22));
+        titleLabel.setForeground(COLOR_TEXT_DARK);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(titleLabel);
 
-        // Tabel
-        String[] columns = {"ID", "Nama", "Telepon", "Alamat"};
-        tableModel = new DefaultTableModel(columns, 0) {
+        addSpacer(contentPanel, 15);
+
+        // 2. Rounded Search Field
+        JPanel searchWrapper = new JPanel(new BorderLayout(8, 0)) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(240, 230, 225));
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 24, 24);
+                g2.dispose();
             }
         };
+        searchWrapper.setOpaque(false);
+        searchWrapper.setBorder(new EmptyBorder(6, 15, 6, 15));
+        searchWrapper.setMaximumSize(new Dimension(Short.MAX_VALUE, 40));
+        searchWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        tblPelanggan = new JTable(tableModel);
-        tblPelanggan.setFont(FONT_REGULAR);
-        tblPelanggan.setRowHeight(25);
-        tblPelanggan.getTableHeader().setBackground(COLOR_PRIMARY);
-        tblPelanggan.getTableHeader().setForeground(COLOR_WHITE);
-        tblPelanggan.getTableHeader().setFont(FONT_BUTTON);
+        JLabel searchIcon = new JLabel("🔍");
+        searchIcon.setForeground(COLOR_TEXT_MUTED);
 
-        // Row Selection Listener
-        tblPelanggan.addMouseListener(new MouseAdapter() {
+        txtSearch = new JTextField();
+        txtSearch.setOpaque(false);
+        txtSearch.setBorder(null);
+        txtSearch.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        txtSearch.setForeground(COLOR_TEXT_DARK);
+        txtSearch.putClientProperty("JTextField.placeholderText", "Cari nama atau telepon");
+        txtSearch.addActionListener(e -> performSearch());
+        // Live search on key release
+        txtSearch.addKeyListener(new java.awt.event.KeyAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
-                int selectedRow = tblPelanggan.getSelectedRow();
-                if (selectedRow != -1) {
-                    loadSelectedCustomerToForm();
-                }
+            public void keyReleased(java.awt.event.KeyEvent evt) {
+                performSearch();
             }
         });
 
-        JScrollPane scrollPane = new JScrollPane(tblPelanggan);
-        leftPanel.add(scrollPane, BorderLayout.CENTER);
-        mainContent.add(leftPanel);
+        searchWrapper.add(searchIcon, BorderLayout.WEST);
+        searchWrapper.add(txtSearch, BorderLayout.CENTER);
+        contentPanel.add(searchWrapper);
 
-        // --- PANEL KANAN: FORM INPUT & AKSI ---
-        JPanel rightPanel = new JPanel(new BorderLayout(10, 10));
-        rightPanel.setBackground(COLOR_WHITE);
-        rightPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1),
-                BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
+        addSpacer(contentPanel, 20);
 
-        // Form Fields
-        JPanel formGrid = new JPanel(new GridBagLayout());
-        formGrid.setBackground(COLOR_WHITE);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 5, 5, 5);
+        // 3. PALING SERING DIGUNAKAN Section
+        JLabel labelFreq = new JLabel("PALING SERING DIGUNAKAN");
+        labelFreq.setFont(new Font("SansSerif", Font.BOLD, 11));
+        labelFreq.setForeground(COLOR_TEXT_MUTED);
+        labelFreq.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(labelFreq);
 
-        // Row 1: ID Pelanggan
-        gbc.gridx = 0; gbc.gridy = 0;
-        formGrid.add(createFormLabel("ID Pelanggan:"), gbc);
-        gbc.gridx = 1;
-        txtId = new JTextField();
-        txtId.setPreferredSize(new Dimension(200, 25));
-        txtId.setEditable(false); // ID di-generate oleh DB (AUTO_INCREMENT)
-        txtId.setBackground(COLOR_BG_LIGHT);
-        formGrid.add(txtId, gbc);
+        addSpacer(contentPanel, 10);
 
-        // Row 2: Nama
-        gbc.gridx = 0; gbc.gridy = 1;
-        formGrid.add(createFormLabel("Nama Lengkap:"), gbc);
-        gbc.gridx = 1;
-        txtNama = new JTextField();
-        formGrid.add(txtNama, gbc);
+        // Pelanggan UMUM Card
+        JPanel cardUmum = buildCustomerRowCard("👥", "Pelanggan UMUM", "Tanpa detail spesifik", "", true);
+        cardUmum.setAlignmentX(Component.LEFT_ALIGNMENT);
+        cardUmum.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                JOptionPane.showMessageDialog(PelangganPanel.this, 
+                    "Pelanggan Umum adalah akun sistem default and tidak dapat diubah.", 
+                    "Info", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        contentPanel.add(cardUmum);
 
-        // Row 3: Nomor Telepon
-        gbc.gridx = 0; gbc.gridy = 2;
-        formGrid.add(createFormLabel("No. Telepon:"), gbc);
-        gbc.gridx = 1;
-        txtTelepon = new JTextField();
-        formGrid.add(txtTelepon, gbc);
+        addSpacer(contentPanel, 25);
 
-        // Row 4: Alamat
-        gbc.gridx = 0; gbc.gridy = 3;
-        formGrid.add(createFormLabel("Alamat:"), gbc);
-        gbc.gridx = 1;
-        txtAlamat = new JTextArea(4, 20);
-        txtAlamat.setLineWrap(true);
-        txtAlamat.setWrapStyleWord(true);
-        txtAlamat.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-        formGrid.add(new JScrollPane(txtAlamat), gbc);
+        // 4. Daftar Pelanggan Section
+        JLabel labelList = new JLabel("Daftar Pelanggan");
+        labelList.setFont(new Font("SansSerif", Font.BOLD, 14));
+        labelList.setForeground(COLOR_TEXT_DARK);
+        labelList.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(labelList);
 
-        rightPanel.add(formGrid, BorderLayout.CENTER);
+        addSpacer(contentPanel, 10);
 
-        // Action Buttons
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        buttonPanel.setBackground(COLOR_WHITE);
+        // List Container
+        listContainer = new JPanel();
+        listContainer.setLayout(new BoxLayout(listContainer, BoxLayout.Y_AXIS));
+        listContainer.setOpaque(false);
+        listContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentPanel.add(listContainer);
 
-        btnTambah = createStyledButton("Tambah Baru", COLOR_SUCCESS, COLOR_WHITE);
-        btnUbah = createStyledButton("Simpan / Ubah", COLOR_PRIMARY, COLOR_WHITE);
-        btnHapus = createStyledButton("Hapus", COLOR_DANGER, COLOR_WHITE);
-        btnClear = createStyledButton("Clear", Color.GRAY, COLOR_WHITE);
+        // ScrollPane wraps content
+        scroll = new JScrollPane(contentPanel);
+        scroll.setBorder(null);
+        scroll.setBackground(COLOR_BG);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
-        btnTambah.addActionListener(e -> handleAddCustomer());
-        btnUbah.addActionListener(e -> handleUpdateCustomer());
-        btnHapus.addActionListener(e -> handleDeleteCustomer());
-        btnClear.addActionListener(e -> clearForm());
+        // Add scroll to layered pane
+        layeredPane.add(scroll, JLayeredPane.DEFAULT_LAYER);
 
-        buttonPanel.add(btnTambah);
-        buttonPanel.add(btnUbah);
-        buttonPanel.add(btnHapus);
-        buttonPanel.add(btnClear);
+        // 5. Floating Action Button (FAB)
+        btnFab = new JButton("+ Tambah Pelanggan") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isRollover()) {
+                    g2.setColor(COLOR_FAB_HOVER);
+                } else {
+                    g2.setColor(COLOR_FAB_BG);
+                }
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 24, 24);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btnFab.setFont(new Font("SansSerif", Font.BOLD, 13));
+        btnFab.setForeground(Color.WHITE);
+        btnFab.setContentAreaFilled(false);
+        btnFab.setBorderPainted(false);
+        btnFab.setFocusPainted(false);
+        btnFab.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnFab.addActionListener(e -> showCustomerFormDialog(null));
 
-        rightPanel.add(buttonPanel, BorderLayout.SOUTH);
-        mainContent.add(rightPanel);
+        layeredPane.add(btnFab, JLayeredPane.PALETTE_LAYER);
 
-        add(mainContent, BorderLayout.CENTER);
+        // Resize Listener for Responsive Bounds
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                int w = getWidth();
+                int h = getHeight();
+                scroll.setBounds(0, 0, w, h);
+
+                int fabW = 160;
+                int fabH = 46;
+                btnFab.setBounds(w - fabW - 20, h - fabH - 20, fabW, fabH);
+            }
+        });
+
+        add(layeredPane, BorderLayout.CENTER);
     }
 
-    private JLabel createFormLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(FONT_BUTTON);
-        label.setForeground(COLOR_PRIMARY);
-        return label;
+    private void addSpacer(JPanel parent, int height) {
+        JPanel spacer = new JPanel();
+        spacer.setOpaque(false);
+        spacer.setPreferredSize(new Dimension(0, height));
+        spacer.setMinimumSize(new Dimension(0, height));
+        spacer.setMaximumSize(new Dimension(Short.MAX_VALUE, height));
+        spacer.setAlignmentX(Component.LEFT_ALIGNMENT);
+        parent.add(spacer);
+    }
+
+    private JPanel buildCustomerRowCard(String icon, String name, String phone, String address, boolean isSystemCard) {
+        JPanel card = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(COLOR_CARD_BG);
+                g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 16, 16));
+                g2.setColor(new Color(232, 224, 218));
+                g2.draw(new RoundRectangle2D.Float(0, 0, getWidth() - 1, getHeight() - 1, 16, 16));
+                g2.dispose();
+            }
+        };
+        card.setLayout(new BorderLayout(15, 0));
+        card.setOpaque(false);
+        card.setBorder(new EmptyBorder(12, 16, 12, 16));
+        card.setMaximumSize(new Dimension(Short.MAX_VALUE, isSystemCard ? 70 : 85));
+        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        // Profile icon circle
+        JPanel iconPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(90, 60, 50));
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.dispose();
+            }
+        };
+        iconPanel.setOpaque(false);
+        iconPanel.setPreferredSize(new Dimension(42, 42));
+        iconPanel.setLayout(new BorderLayout());
+        JLabel lblIcon = new JLabel(icon, SwingConstants.CENTER);
+        lblIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 18));
+        lblIcon.setForeground(Color.WHITE);
+        iconPanel.add(lblIcon, BorderLayout.CENTER);
+
+        // Info Area
+        JPanel info = new JPanel();
+        info.setLayout(new BoxLayout(info, BoxLayout.Y_AXIS));
+        info.setOpaque(false);
+
+        JLabel lblName = new JLabel(name);
+        lblName.setFont(new Font("SansSerif", Font.BOLD, 14));
+        lblName.setForeground(COLOR_TEXT_DARK);
+
+        info.add(Box.createVerticalGlue());
+        info.add(lblName);
+
+        if (isSystemCard) {
+            JLabel lblDesc = new JLabel(phone);
+            lblDesc.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            lblDesc.setForeground(COLOR_TEXT_MUTED);
+            info.add(Box.createRigidArea(new Dimension(0, 2)));
+            info.add(lblDesc);
+            info.add(Box.createVerticalGlue());
+
+            JLabel arrow = new JLabel("❯");
+            arrow.setFont(new Font("SansSerif", Font.BOLD, 12));
+            arrow.setForeground(COLOR_TEXT_MUTED);
+            card.add(arrow, BorderLayout.EAST);
+        } else {
+            JLabel lblPhone = new JLabel(phone);
+            lblPhone.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            lblPhone.setForeground(COLOR_TEXT_DARK);
+
+            JPanel topRow = new JPanel(new BorderLayout());
+            topRow.setOpaque(false);
+            topRow.add(lblName, BorderLayout.WEST);
+            topRow.add(lblPhone, BorderLayout.EAST);
+
+            JLabel lblAddress = new JLabel("<html>📍 " + address + "</html>");
+            lblAddress.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            lblAddress.setForeground(COLOR_TEXT_MUTED);
+
+            info.removeAll();
+            info.setLayout(new GridLayout(2, 1, 0, 4));
+            info.add(topRow);
+            info.add(lblAddress);
+        }
+
+        card.add(iconPanel, BorderLayout.WEST);
+        card.add(info, BorderLayout.CENTER);
+
+        return card;
     }
 
     @Override
     public void onPageLoad() {
-        loadCustomerTable(pelangganService.getAllCustomers());
-        clearForm();
+        txtSearch.setText("");
+        loadCustomers(pelangganService.getAllCustomers());
     }
 
-    private void loadCustomerTable(List<Pelanggan> list) {
-        tableModel.setRowCount(0);
-        for (Pelanggan c : list) {
-            tableModel.addRow(new Object[]{
-                    c.getId(),
-                    c.getNama(),
-                    c.getTelepon(),
-                    c.getAlamat()
+    private void loadCustomers(List<Pelanggan> list) {
+        listContainer.removeAll();
+        for (Pelanggan p : list) {
+            if (p.getId() == 1) continue; // Skip Pelanggan Umum in bottom list
+
+            JPanel card = buildCustomerRowCard("👤", p.getNama(), p.getTelepon(), p.getAlamat(), false);
+            card.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    showCustomerFormDialog(p);
+                }
             });
+            listContainer.add(card);
+            listContainer.add(Box.createRigidArea(new Dimension(0, 10)));
         }
+        listContainer.revalidate();
+        listContainer.repaint();
     }
 
     private void performSearch() {
         String keyword = txtSearch.getText();
-        loadCustomerTable(pelangganService.searchCustomers(keyword));
+        loadCustomers(pelangganService.searchCustomers(keyword));
     }
 
-    private void loadSelectedCustomerToForm() {
-        int selectedRow = tblPelanggan.getSelectedRow();
-        if (selectedRow != -1) {
-            int id = (int) tableModel.getValueAt(selectedRow, 0);
+    // Modal dialog popup for Add / Edit
+    private void showCustomerFormDialog(Pelanggan p) {
+        Window parentWindow = SwingUtilities.getWindowAncestor(this);
+        JDialog dialog = new JDialog(parentWindow, p == null ? "Tambah Pelanggan" : "Ubah Pelanggan", Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setSize(350, 420);
+        dialog.setLocationRelativeTo(parentWindow);
+        dialog.setResizable(false);
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        JLabel title = new JLabel(p == null ? "Tambah Pelanggan" : "Ubah Pelanggan");
+        title.setFont(new Font("SansSerif", Font.BOLD, 18));
+        title.setForeground(COLOR_TEXT_DARK);
+        title.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(title);
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // Inputs
+        JLabel lblNama = new JLabel("Nama Lengkap");
+        lblNama.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblNama.setForeground(COLOR_TEXT_MUTED);
+        lblNama.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextField txtNama = new JTextField(p == null ? "" : p.getNama());
+        txtNama.setMaximumSize(new Dimension(Short.MAX_VALUE, 36));
+        txtNama.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblTelepon = new JLabel("Nomor Telepon");
+        lblTelepon.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblTelepon.setForeground(COLOR_TEXT_MUTED);
+        lblTelepon.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextField txtTelepon = new JTextField(p == null ? "" : p.getTelepon());
+        txtTelepon.setMaximumSize(new Dimension(Short.MAX_VALUE, 36));
+        txtTelepon.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel lblAlamat = new JLabel("Alamat Lengkap");
+        lblAlamat.setFont(new Font("SansSerif", Font.BOLD, 11));
+        lblAlamat.setForeground(COLOR_TEXT_MUTED);
+        lblAlamat.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JTextArea txtAlamat = new JTextArea(4, 20);
+        txtAlamat.setLineWrap(true);
+        txtAlamat.setWrapStyleWord(true);
+        txtAlamat.setText(p == null ? "" : p.getAlamat());
+        txtAlamat.setBorder(BorderFactory.createLineBorder(new Color(230, 220, 215)));
+        JScrollPane scrollArea = new JScrollPane(txtAlamat);
+        scrollArea.setMaximumSize(new Dimension(Short.MAX_VALUE, 80));
+        scrollArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        panel.add(lblNama);
+        panel.add(Box.createRigidArea(new Dimension(0, 4)));
+        panel.add(txtNama);
+        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+        panel.add(lblTelepon);
+        panel.add(Box.createRigidArea(new Dimension(0, 4)));
+        panel.add(txtTelepon);
+        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+        panel.add(lblAlamat);
+        panel.add(Box.createRigidArea(new Dimension(0, 4)));
+        panel.add(scrollArea);
+        panel.add(Box.createRigidArea(new Dimension(0, 20)));
+
+        // Action Buttons Row
+        JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        btnRow.setOpaque(false);
+        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JButton btnSave = createStyledButton("Simpan", COLOR_FAB_BG, Color.WHITE);
+        btnSave.addActionListener(e -> {
             try {
-                Pelanggan c = pelangganService.getCustomerById(id);
-                txtId.setText(String.valueOf(c.getId()));
-                txtNama.setText(c.getNama());
-                txtTelepon.setText(c.getTelepon());
-                txtAlamat.setText(c.getAlamat());
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
+                String nama = txtNama.getText().trim();
+                String telepon = txtTelepon.getText().trim();
+                String alamat = txtAlamat.getText().trim();
 
-    private void handleAddCustomer() {
-        try {
-            Pelanggan c = getCustomerFromInput();
-            pelangganService.addCustomer(c);
-            JOptionPane.showMessageDialog(this, "Pelanggan berhasil ditambahkan!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
-            onPageLoad();
-        } catch (ValidationException ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Validasi Gagal", JOptionPane.WARNING_MESSAGE);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Gagal menambah pelanggan: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
+                if (nama.isEmpty() || telepon.isEmpty() || alamat.isEmpty()) {
+                    throw new ValidationException("Semua field formulir harus diisi.");
+                }
 
-    private void handleUpdateCustomer() {
-        try {
-            String idStr = txtId.getText();
-            if (idStr == null || idStr.trim().isEmpty()) {
-                throw new ValidationException("Pilih pelanggan yang akan diubah terlebih dahulu.");
-            }
-            int id = Integer.parseInt(idStr);
-            Pelanggan c = getCustomerFromInput();
-            c.setId(id);
-            pelangganService.updateCustomer(c);
-            JOptionPane.showMessageDialog(this, "Pelanggan berhasil diperbarui!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
-            onPageLoad();
-        } catch (ValidationException ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "Validasi Gagal", JOptionPane.WARNING_MESSAGE);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Gagal memperbarui pelanggan: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void handleDeleteCustomer() {
-        String idStr = txtId.getText();
-        if (idStr == null || idStr.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Pilih pelanggan dari tabel terlebih dahulu.", "Info", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-
-        int id = Integer.parseInt(idStr);
-        if (id == 1) {
-            JOptionPane.showMessageDialog(this, "Pelanggan Umum tidak boleh dihapus.", "Peringatan", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        int confirm = JOptionPane.showConfirmDialog(this, 
-                "Apakah Anda yakin ingin menghapus pelanggan dengan ID '" + id + "'?", "Konfirmasi Hapus", 
-                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        
-        if (confirm == JOptionPane.YES_OPTION) {
-            try {
-                pelangganService.deleteCustomer(id);
-                JOptionPane.showMessageDialog(this, "Pelanggan berhasil dihapus!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
+                if (p == null) {
+                    Pelanggan newCustomer = new Pelanggan(0, nama, telepon, alamat);
+                    pelangganService.addCustomer(newCustomer);
+                } else {
+                    Pelanggan updated = new Pelanggan(p.getId(), nama, telepon, alamat);
+                    pelangganService.updateCustomer(updated);
+                }
+                dialog.dispose();
                 onPageLoad();
+            } catch (ValidationException ex) {
+                JOptionPane.showMessageDialog(dialog, ex.getMessage(), "Validasi Gagal", JOptionPane.WARNING_MESSAGE);
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Gagal menghapus pelanggan: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(dialog, "Gagal menyimpan data: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
+        });
+
+        if (p != null) {
+            JButton btnDelete = createStyledButton("Hapus", new Color(198, 40, 40), Color.WHITE);
+            btnDelete.addActionListener(e -> {
+                int confirm = JOptionPane.showConfirmDialog(dialog, 
+                    "Hapus pelanggan " + p.getNama() + "?", "Konfirmasi Hapus", 
+                    JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    try {
+                        pelangganService.deleteCustomer(p.getId());
+                        dialog.dispose();
+                        onPageLoad();
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(dialog, "Gagal menghapus: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            });
+            btnRow.add(btnDelete);
         }
-    }
 
-    private Pelanggan getCustomerFromInput() {
-        String nama = txtNama.getText();
-        String telepon = txtTelepon.getText();
-        String alamat = txtAlamat.getText();
+        JButton btnCancel = createStyledButton("Batal", Color.GRAY, Color.WHITE);
+        btnCancel.addActionListener(e -> dialog.dispose());
 
-        return new Pelanggan(nama, telepon, alamat);
-    }
+        btnRow.add(btnCancel);
+        btnRow.add(btnSave);
 
-    private void clearForm() {
-        txtId.setText("");
-        txtNama.setText("");
-        txtTelepon.setText("");
-        txtAlamat.setText("");
-        tblPelanggan.clearSelection();
+        panel.add(btnRow);
+
+        dialog.add(panel);
+        dialog.setVisible(true);
     }
 }

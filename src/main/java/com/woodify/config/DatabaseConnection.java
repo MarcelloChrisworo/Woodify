@@ -21,6 +21,7 @@ public class DatabaseConnection {
     // Gunakan boolean untuk mempermudah perpindahan antar engine database
     private static final boolean USE_SQLITE = true; 
 
+    private static Connection rawConnection = null;
     private static Connection connection = null;
 
     private DatabaseConnection() {
@@ -29,11 +30,11 @@ public class DatabaseConnection {
 
     public static synchronized Connection getConnection() {
         try {
-            if (connection == null || connection.isClosed()) {
+            if (rawConnection == null || rawConnection.isClosed()) {
                 if (USE_SQLITE) {
                     Class.forName("org.sqlite.JDBC");
-                    connection = DriverManager.getConnection(SQLITE_URL);
-                    try (Statement pragmaStmt = connection.createStatement()) {
+                    rawConnection = DriverManager.getConnection(SQLITE_URL);
+                    try (Statement pragmaStmt = rawConnection.createStatement()) {
                         pragmaStmt.execute("PRAGMA foreign_keys = ON;");
                     }
                     System.out.println("Koneksi database SQLite berhasil.");
@@ -51,12 +52,30 @@ public class DatabaseConnection {
                         System.err.println("Gagal memastikan keberadaan database: " + e.getMessage());
                     }
 
-                    connection = DriverManager.getConnection(MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD);
+                    rawConnection = DriverManager.getConnection(MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD);
                     System.out.println("Koneksi database MySQL berhasil.");
                 }
                 
                 // Secara otomatis buat tabel jika belum ada
-                initializeDatabaseSchema(connection);
+                initializeDatabaseSchema(rawConnection);
+
+                // Create a proxy that ignores close() calls to preserve transaction connection singleton
+                final Connection finalRaw = rawConnection;
+                connection = (Connection) java.lang.reflect.Proxy.newProxyInstance(
+                    DatabaseConnection.class.getClassLoader(),
+                    new Class[]{Connection.class},
+                    (proxy, method, args) -> {
+                        if ("close".equals(method.getName())) {
+                            // Ignore close() to keep singleton connection open during try-with-resources
+                            return null;
+                        }
+                        try {
+                            return method.invoke(finalRaw, args);
+                        } catch (java.lang.reflect.InvocationTargetException ite) {
+                            throw ite.getCause();
+                        }
+                    }
+                );
             }
         } catch (ClassNotFoundException e) {
             throw new DatabaseConnectionException("Driver database tidak ditemukan.", e);
@@ -67,15 +86,16 @@ public class DatabaseConnection {
     }
 
     public static void closeConnection() {
-        if (connection != null) {
+        if (rawConnection != null) {
             try {
-                if (!connection.isClosed()) {
-                    connection.close();
+                if (!rawConnection.isClosed()) {
+                    rawConnection.close();
                     System.out.println("Koneksi database ditutup.");
                 }
             } catch (SQLException e) {
                 System.err.println("Gagal menutup koneksi database: " + e.getMessage());
             } finally {
+                rawConnection = null;
                 connection = null;
             }
         }

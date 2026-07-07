@@ -29,7 +29,8 @@ public class DetailTransaksiRepositoryImpl implements DetailTransaksiRepository 
                 }
             }
         } catch (SQLException e) {
-            throw new DatabaseConnectionException("Gagal menyimpan detail transaksi.", e);
+            e.printStackTrace();
+            throw new DatabaseConnectionException("Gagal menyimpan detail transaksi: " + e.getMessage(), e);
         }
     }
 

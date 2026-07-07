@@ -10,27 +10,29 @@ import com.woodify.view.report.LaporanPanel;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.HashMap;
 import java.util.Map;
 
 public class MainFrame extends JFrame {
     private final CardLayout cardLayout;
     private final JPanel contentPanel;
-    private final JPanel sidebarPanel;
+    private final JPanel bottomNavPanel;
     private final User currentUser;
 
     private final Map<String, BasePanel> panels = new HashMap<>();
+    private final Map<String, NavButton> navButtons = new HashMap<>();
 
-    // Palette warna
-    private static final Color COLOR_PRIMARY = new Color(27, 77, 62);
-    private static final Color COLOR_SECONDARY = new Color(212, 163, 115);
+    // Palette warna mobile
+    private static final Color COLOR_PRIMARY = new Color(27, 77, 62);    // Forest green
     private static final Color COLOR_WHITE = Color.WHITE;
-    private static final Color COLOR_BG_LIGHT = new Color(248, 249, 250);
+    private static final Color COLOR_TOPBAR_BG = new Color(255, 248, 245); // Cream background
+    private static final Color COLOR_NAV_BG = new Color(245, 238, 235);    // Soft cream/beige
 
     public MainFrame() {
         this.currentUser = SessionManager.getCurrentUser();
         if (currentUser == null) {
-            // Pengamanan jika masuk tanpa sesi
             dispose();
             SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
             throw new IllegalStateException("Sesi user kosong. Harus login.");
@@ -38,148 +40,229 @@ public class MainFrame extends JFrame {
 
         this.cardLayout = new CardLayout();
         this.contentPanel = new JPanel(cardLayout);
-        this.sidebarPanel = new JPanel();
+        this.bottomNavPanel = new JPanel(new GridLayout(1, 4, 0, 0));
 
         initUI();
     }
 
     private void initUI() {
-        setTitle("Woodify - Sistem Informasi Penjualan UMKM Furnitur");
-        setSize(1100, 700);
+        setTitle("Woodify");
+        // mobile viewport size matching LoginFrame aspect ratio
+        setSize(390, 820);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
+        setResizable(false);
 
-        // Layout utama
         setLayout(new BorderLayout());
 
-        // Setup Sidebar & Panel Konten
-        setupSidebar();
+        // 1. Setup Global Top Bar
+        setupTopBar();
+
+        // 2. Setup Bottom Nav Bar
+        setupBottomNav();
+
+        // 3. Setup Content Panels
         setupContentPanels();
 
-        add(sidebarPanel, BorderLayout.WEST);
         add(contentPanel, BorderLayout.CENTER);
-        
+        add(bottomNavPanel, BorderLayout.SOUTH);
+
         // Load Halaman Pertama (Dashboard)
         showPanel("dashboard");
     }
 
-    private void setupSidebar() {
-        sidebarPanel.setPreferredSize(new Dimension(240, 700));
-        sidebarPanel.setBackground(COLOR_PRIMARY);
-        sidebarPanel.setLayout(new BoxLayout(sidebarPanel, BoxLayout.Y_AXIS));
-        sidebarPanel.setBorder(BorderFactory.createEmptyBorder(20, 15, 20, 15));
+    private void setupTopBar() {
+        JPanel topBar = new JPanel(new BorderLayout());
+        topBar.setBackground(COLOR_TOPBAR_BG);
+        topBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(235, 225, 220)),
+            BorderFactory.createEmptyBorder(12, 20, 12, 20)
+        ));
+        topBar.setPreferredSize(new Dimension(390, 60));
 
-        // Area Profil User
-        JLabel lblAvatar = new JLabel("👤");
-        lblAvatar.setFont(new Font("SansSerif", Font.PLAIN, 40));
-        lblAvatar.setForeground(COLOR_SECONDARY);
-        lblAvatar.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel lblLogo = new JLabel("WOODIFY");
+        lblLogo.setFont(new Font("SansSerif", Font.BOLD, 22));
+        lblLogo.setForeground(new Color(74, 35, 17)); // Dark brown
 
-        JLabel lblName = new JLabel(currentUser.getNamaLengkap());
-        lblName.setFont(new Font("SansSerif", Font.BOLD, 14));
-        lblName.setForeground(COLOR_WHITE);
-        lblName.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Circular profile icon
+        JButton btnProfile = new JButton("👤") {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(230, 225, 220));
+                g2.fillOval(0, 0, getWidth(), getHeight());
+                g2.dispose();
+                super.paintComponent(g);
+            }
+        };
+        btnProfile.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 13));
+        btnProfile.setContentAreaFilled(false);
+        btnProfile.setBorderPainted(false);
+        btnProfile.setFocusPainted(false);
+        btnProfile.setPreferredSize(new Dimension(34, 34));
+        btnProfile.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnProfile.addActionListener(e -> showPanel("profil"));
 
-        JLabel lblRole = new JLabel(currentUser.getRoleDisplay());
-        lblRole.setFont(new Font("SansSerif", Font.ITALIC, 11));
-        lblRole.setForeground(COLOR_SECONDARY);
-        lblRole.setAlignmentX(Component.CENTER_ALIGNMENT);
+        topBar.add(lblLogo, BorderLayout.WEST);
+        topBar.add(btnProfile, BorderLayout.EAST);
 
-        sidebarPanel.add(lblAvatar);
-        sidebarPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        sidebarPanel.add(lblName);
-        sidebarPanel.add(Box.createRigidArea(new Dimension(0, 3)));
-        sidebarPanel.add(lblRole);
-        sidebarPanel.add(Box.createRigidArea(new Dimension(0, 30)));
-        sidebarPanel.add(new JSeparator());
-        sidebarPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-
-        // Navigasi Menu
-        addMenuButton("Beranda / Dashboard", "dashboard");
-        
-        // PBO Access Control: Kasir hanya bisa melihat stok produk, tidak CRUD.
-        addMenuButton("Manajemen Produk", "produk");
-        addMenuButton("Manajemen Pelanggan", "pelanggan");
-        addMenuButton("Transaksi Penjualan", "transaksi");
-
-        // PBO Access Control / Polymorphism: Laporan hanya untuk Owner
-        if (currentUser.hasAccessToReports()) {
-            addMenuButton("Laporan Penjualan", "laporan");
-        }
-
-        // Space filler
-        sidebarPanel.add(Box.createVerticalGlue());
-
-        // Tombol Logout
-        JButton btnLogout = new JButton("Logout");
-        btnLogout.setFont(new Font("SansSerif", Font.BOLD, 12));
-        btnLogout.setBackground(new Color(220, 53, 69));
-        btnLogout.setForeground(COLOR_WHITE);
-        btnLogout.setFocusPainted(false);
-        btnLogout.setMaximumSize(new Dimension(210, 35));
-        btnLogout.setPreferredSize(new Dimension(210, 35));
-        btnLogout.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btnLogout.addActionListener(e -> handleLogout());
-        btnLogout.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        sidebarPanel.add(btnLogout);
+        add(topBar, BorderLayout.NORTH);
     }
 
-    private void addMenuButton(String text, String targetPanelName) {
-        JButton btn = new JButton(text);
-        btn.setFont(new Font("SansSerif", Font.BOLD, 12));
-        btn.setForeground(COLOR_WHITE);
-        btn.setBackground(COLOR_PRIMARY);
-        btn.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
-        btn.setMaximumSize(new Dimension(210, 40));
-        btn.setPreferredSize(new Dimension(210, 40));
-        btn.setHorizontalAlignment(SwingConstants.LEFT);
-        btn.setFocusPainted(false);
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btn.setAlignmentX(Component.CENTER_ALIGNMENT);
+    private void setupBottomNav() {
+        bottomNavPanel.setBackground(COLOR_NAV_BG);
+        bottomNavPanel.setPreferredSize(new Dimension(390, 75));
+        bottomNavPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(230, 220, 215)));
 
-        btn.addActionListener(e -> showPanel(targetPanelName));
+        // Create buttons
+        navButtons.put("dashboard", new NavButton("dashboard", "⬜", "Beranda"));
+        navButtons.put("manajemen_menu", new NavButton("manajemen_menu", "🗳️", "Manajemen"));
+        navButtons.put("transaksi", new NavButton("transaksi", "🧾", "Transaksi"));
+        navButtons.put("profil", new NavButton("profil", "👤", "Profil"));
 
-        sidebarPanel.add(btn);
-        sidebarPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        // Add to panel in sequence
+        bottomNavPanel.add(navButtons.get("dashboard"));
+        bottomNavPanel.add(navButtons.get("manajemen_menu"));
+        bottomNavPanel.add(navButtons.get("transaksi"));
+        bottomNavPanel.add(navButtons.get("profil"));
     }
 
     private void setupContentPanels() {
-        // Daftarkan panel-panel modular ke Map & CardLayout
         panels.put("dashboard", new DashboardPanel());
+        panels.put("manajemen_menu", new ManajemenMenuPanel(this::showPanel));
         panels.put("produk", new ProdukPanel());
         panels.put("pelanggan", new PelangganPanel());
         panels.put("transaksi", new TransaksiPanel());
-        
+        panels.put("profil", new ProfilPanel(this::handleLogout));
+
         if (currentUser.hasAccessToReports()) {
             panels.put("laporan", new LaporanPanel());
         }
 
-        // Masukkan panel ke container CardLayout
+        // Add panels to CardLayout container
         for (Map.Entry<String, BasePanel> entry : panels.entrySet()) {
             contentPanel.add(entry.getValue(), entry.getKey());
         }
     }
 
     public void showPanel(String panelName) {
+        if (panelName.equals("transaksi") && currentUser.hasAccessToReports()) {
+            panelName = "laporan";
+        }
         cardLayout.show(contentPanel, panelName);
-        
-        // Panggil reload database untuk panel yang aktif
+
+        // Update Bottom Nav state
+        updateNavSelection(panelName);
+
+        // Reload data
         BasePanel activePanel = panels.get(panelName);
         if (activePanel != null) {
             activePanel.onPageLoad();
         }
     }
 
+    private void updateNavSelection(String activePanelName) {
+        String highlightKey = activePanelName;
+        // Group sub-pages of manajemen to manajemen tab highlight
+        if (activePanelName.equals("produk") || activePanelName.equals("pelanggan")) {
+            highlightKey = "manajemen_menu";
+        } else if (activePanelName.equals("laporan")) {
+            highlightKey = "transaksi";
+        }
+
+        for (Map.Entry<String, NavButton> entry : navButtons.entrySet()) {
+            entry.getValue().setActive(entry.getKey().equals(highlightKey));
+        }
+    }
+
     private void handleLogout() {
-        int confirm = JOptionPane.showConfirmDialog(this, 
-                "Apakah Anda yakin ingin logout?", "Konfirmasi Logout", 
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Apakah Anda yakin ingin logout?", "Konfirmasi Logout",
                 JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-        
+
         if (confirm == JOptionPane.YES_OPTION) {
             SessionManager.logout();
             dispose();
             SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
+        }
+    }
+
+    // --- NAV BUTTON CUSTOM COMPONENT ---
+    private class NavButton extends JPanel {
+        private final String targetName;
+        private final String icon;
+        private final String label;
+        private boolean active;
+
+        public NavButton(String targetName, String icon, String label) {
+            this.targetName = targetName;
+            this.icon = icon;
+            this.label = label;
+            this.active = false;
+
+            setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+            setOpaque(false);
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    showPanel(targetName);
+                }
+            });
+
+            updateUIState();
+        }
+
+        public void setActive(boolean active) {
+            this.active = active;
+            updateUIState();
+        }
+
+        private void updateUIState() {
+            removeAll();
+
+            // Icon Panel (circular background if active)
+            JPanel iconWrapper = new JPanel() {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    if (active) {
+                        Graphics2D g2 = (Graphics2D) g.create();
+                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                        g2.setColor(new Color(74, 35, 17)); // Dark brown circle
+                        int size = 38;
+                        int x = (getWidth() - size) / 2;
+                        int y = (getHeight() - size) / 2;
+                        g2.fillOval(x, y, size, size);
+                        g2.dispose();
+                    }
+                }
+            };
+            iconWrapper.setOpaque(false);
+            iconWrapper.setPreferredSize(new Dimension(50, 40));
+            iconWrapper.setMaximumSize(new Dimension(50, 40));
+            iconWrapper.setLayout(new BorderLayout());
+
+            JLabel lblIcon = new JLabel(icon, SwingConstants.CENTER);
+            lblIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 18));
+            lblIcon.setForeground(active ? Color.WHITE : new Color(74, 35, 17));
+            iconWrapper.add(lblIcon, BorderLayout.CENTER);
+
+            // Label
+            JLabel lblLabel = new JLabel(label, SwingConstants.CENTER);
+            lblLabel.setFont(new Font("SansSerif", active ? Font.BOLD : Font.PLAIN, 10));
+            lblLabel.setForeground(new Color(74, 35, 17));
+            lblLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            add(Box.createVerticalGlue());
+            add(iconWrapper);
+            add(Box.createRigidArea(new Dimension(0, 3)));
+            add(lblLabel);
+            add(Box.createVerticalGlue());
+
+            revalidate();
+            repaint();
         }
     }
 }
